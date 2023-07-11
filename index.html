@@ -60,17 +60,9 @@
     <script>
         let fileHandle, db
 
-        async function getFile() {
-            try {
-                [fileHandle] = await window.showOpenFilePicker()
-            } catch (error) {
-                alert(error)
-            }
-        }
-
         async function openSqlite() {
             if (fileHandle === undefined) {
-                await getFile()
+                [fileHandle] = await window.showOpenFilePicker()
             }
 
             if (fileHandle === undefined) {
