@@ -58,6 +58,22 @@
 <body>
 
     <script>
+        class Query {
+            el = name => document.createElement(name)
+            one = id => document.getElementById(id)
+            any = ids => (ids instanceof Array ? ids : [ids]).map(id => this.one(id))
+            // 实现一个链式调用的base方法，其他方法都继承base方法
+            base = (ids, callback) => {
+                this.any(ids).forEach(item => callback(item))
+                return this
+            }
+            text = (ids, text) => { return this.base(ids, item => item.innerText = text) }
+            enable = ids => { return this.base(ids, item => item.removeAttribute('disabled')) }
+            disable = ids => { return this.base(ids, item => item.setAttribute('disabled', 'disabled')) }
+        }
+        let $ = new Query()
+
+
         let fileHandle, db
 
         async function openSqlite() {
@@ -78,18 +94,16 @@
             let SQL = await initSqlJs();
             db = new SQL.Database(result.value)
 
-            document.getElementById('btn_close').removeAttribute('disabled')
-            document.getElementById('btn_save').removeAttribute('disabled')
-            document.getElementById('btn_open').setAttribute('disabled', 'disabled')
-            document.getElementById('btn_execute').removeAttribute('disabled')
-            document.getElementById('label_filename').innerText = fileHandle.name
-            document.getElementById('label_log').innerText = fileHandle.name + ' open success'
+            $.disable(['btn_open'])
+                .enable(['btn_close', 'btn_save', 'btn_execute'])
+                .text('label_filename', fileHandle.name)
+                .text('label_log', fileHandle.name + ' open success')
         }
 
         async function writeFile() {
             const writable = await fileHandle.createWritable()
 
-            document.getElementById('label_log').innerText = fileHandle.name + ' save start'
+            $.text('label_log', fileHandle.name + ' save start')
 
             const startTime = performance.now();
 
@@ -99,17 +113,16 @@
 
             const endTime = performance.now();
             const executionTime = endTime - startTime;
-            document.getElementById('label_log').innerText = fileHandle.name + ' save success, time cost: ' + executionTime + ' ms'
+
+            $.text('label_log', fileHandle.name + ' save success, time cost: ' + executionTime + ' ms')
         }
 
         async function closeSqlite() {
             if (fileHandle instanceof FileSystemFileHandle) {
-                document.getElementById('btn_save').setAttribute('disabled', 'disabled')
-                document.getElementById('btn_close').setAttribute('disabled', 'disabled')
-                document.getElementById('btn_execute').setAttribute('disabled', 'disabled')
-                document.getElementById('btn_open').removeAttribute('disabled')
-                document.getElementById('label_filename').innerText = ''
-                document.getElementById('label_log').innerText = fileHandle.name + ' closed'
+                $.disable(['btn_save', 'btn_close', 'btn_execute'])
+                    .enable('btn_open')
+                    .text('label_filename', '')
+                    .text('label_log', fileHandle.name + ' closed')
 
                 showTable([])
 
@@ -120,7 +133,7 @@
         async function executeSql() {
             let logs = ''
             try {
-                let textarea = document.getElementById('text_input')
+                let textarea = $.one('text_input')
 
                 // 获取选中的文本 或者 全部文本
                 var sql = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd) || textarea.value;
@@ -140,18 +153,16 @@
                 showTable([])
             }
 
-            document.getElementById('label_log').innerText = logs
+            $.text('label_log', logs)
         }
 
         onload = async function () {
-            document.getElementById('btn_save').setAttribute('disabled', 'disabled')
-            document.getElementById('btn_close').setAttribute('disabled', 'disabled')
-            document.getElementById('btn_execute').setAttribute('disabled', 'disabled')
+            $.disable(['btn_save', 'btn_close', 'btn_execute'])
         }
 
         async function showTable(jsonData) {
             // 获取表格容器
-            var tableContainer = document.getElementById("table-container");
+            var tableContainer = $.one('table-container')
             tableContainer.innerHTML = ''
 
             if (jsonData.length === 0) {
@@ -159,16 +170,16 @@
             }
 
             // 创建表格元素
-            var table = document.createElement("table");
+            var table = $.el("table");
 
             // 创建表头
-            var thead = document.createElement("thead");
-            var tr = document.createElement("tr");
+            var thead = $.el("thead");
+            var tr = $.el("tr");
 
 
             // 添加表头列
             jsonData[0].columns.forEach(function (column) {
-                var th = document.createElement("th");
+                var th = $.el("th");
                 th.textContent = column;
                 tr.appendChild(th);
             });
@@ -180,14 +191,14 @@
             table.appendChild(thead);
 
             // 创建表体
-            var tbody = document.createElement("tbody");
+            var tbody = $.el("tbody");
 
             // 添加表体行和列
             jsonData[0].values.forEach(function (value) {
-                var tr = document.createElement("tr");
+                var tr = $.el("tr");
 
                 value.forEach(function (val) {
-                    var td = document.createElement("td");
+                    var td = $.el("td");
                     td.textContent = val;
                     tr.appendChild(td);
                 });
