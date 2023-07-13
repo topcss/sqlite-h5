@@ -67,9 +67,9 @@
                 this.any(ids).forEach(item => callback(item))
                 return this
             }
-            text = (ids, text) => { return this.base(ids, item => item.innerText = text) }
-            enable = ids => { return this.base(ids, item => item.removeAttribute('disabled')) }
-            disable = ids => { return this.base(ids, item => item.setAttribute('disabled', 'disabled')) }
+            text = (ids, text) => this.base(ids, item => item.innerText = text)
+            enable = ids => this.base(ids, item => item.removeAttribute('disabled'))
+            disable = ids => this.base(ids, item => item.setAttribute('disabled', 'disabled'))
         }
         let $ = new Query()
 
