@@ -58,6 +58,12 @@
 <body>
 
     <script>
+        async function timeCost(callback) {
+            const startTime = performance.now();
+            await callback()
+            return performance.now() - startTime;
+        }
+
         class Query {
             el = name => document.createElement(name)
             one = id => document.getElementById(id)
@@ -70,6 +76,7 @@
             text = (ids, text) => this.base(ids, item => item.innerText = text)
             enable = ids => this.base(ids, item => item.removeAttribute('disabled'))
             disable = ids => this.base(ids, item => item.setAttribute('disabled', 'disabled'))
+            click = (ids, callback) => this.base(ids, item => item.addEventListener('click', callback))
         }
 
         class FileSystem {
@@ -111,139 +118,150 @@
             }
         }
 
-        async function timeCost(callback) {
-            const startTime = performance.now();
-            await callback()
-            return performance.now() - startTime;
-        }
+        class Sqlite {
 
-        let $ = new Query()
-        let fileSystem = new FileSystem()
-        let db
+            constructor() {
+                this.db = null
+                this.fileSystem = new FileSystem()
+                this.dom = new Query()
 
-        async function saveSqlite() {
-            $.text('label_log', fileSystem.getFileName() + ' save start')
-
-            const time = await timeCost(async () => {
-                const writableStream = db.export()
-                await fileSystem.saveStream(writableStream) // 保存文件
-            })
-
-            $.text('label_log', fileSystem.getFileName() + ' save success, time cost: ' + time + ' ms')
-        }
-
-        async function openSqlite() {
-            let result = await fileSystem.getStream() // 获取文件流
-
-            let SQL = await initSqlJs();
-            db = new SQL.Database(result)
-
-            $.disable(['btn_open'])
-                .enable(['btn_close', 'btn_save', 'btn_execute'])
-                .text('label_filename', fileSystem.getFileName())
-                .text('label_log', fileSystem.getFileName() + ' open success')
-        }
-
-        async function closeSqlite() {
-            $.disable(['btn_save', 'btn_close', 'btn_execute'])
-                .enable('btn_open')
-                .text('label_filename', '')
-                .text('label_log', fileSystem.getFileName() + ' closed')
-
-            showTable([])
-
-            fileSystem.closeStream() // 关闭文件
-        }
-
-        async function executeSql() {
-            let result = []
-
-            let textarea = $.one('text_input')
-
-            // 获取选中的文本 或者 全部文本
-            var sql = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd) || textarea.value;
-
-            const time = await timeCost(async () => {
-                result = db.exec(sql);
-            })
-
-            showTable(result)
-
-            $.text('label_log', `代码执行时间：${time} 毫秒\n`)
-        }
-
-        async function showTable(jsonData) {
-            // 获取表格容器
-            var tableContainer = $.one('table-container')
-            tableContainer.innerHTML = ''
-
-            if (jsonData.length === 0) {
-                return
+                this.render()
             }
 
-            // 创建表格元素
-            var table = $.el("table");
+            render() {
+                // 初始化
+                this.dom
+                    .disable(['btn_save', 'btn_close', 'btn_execute'])
+                    .click('btn_open', () => this.open())
+                    .click('btn_close', () => this.close())
+                    .click('btn_save', () => this.save())
+                    .click('btn_execute', () => this.execute())
+            }
 
-            // 创建表头
-            var thead = $.el("thead");
-            var tr = $.el("tr");
+            async open() {
+                let result = await this.fileSystem.getStream() // 获取文件流
 
+                let SQL = await initSqlJs();
+                this.db = new SQL.Database(result)
 
-            // 添加表头列
-            jsonData[0].columns.forEach(function (column) {
-                var th = $.el("th");
-                th.textContent = column;
-                tr.appendChild(th);
-            });
+                this.dom.disable(['btn_open'])
+                    .enable(['btn_close', 'btn_save', 'btn_execute'])
+                    .text('label_filename', this.fileSystem.getFileName())
+                    .text('label_log', this.fileSystem.getFileName() + ' open success')
+            }
 
-            // 将表头行添加到表头部分
-            thead.appendChild(tr);
+            async save() {
+                this.dom.text('label_log', this.fileSystem.getFileName() + ' save start')
 
-            // 将表头部分添加到表格中
-            table.appendChild(thead);
+                const time = await timeCost(async () => {
+                    const writableStream = this.db.export()
+                    await this.fileSystem.saveStream(writableStream) // 保存文件
+                })
 
-            // 创建表体
-            var tbody = $.el("tbody");
+                this.dom.text('label_log', this.fileSystem.getFileName() + ' save success, time cost: ' + time + ' ms')
+            }
 
-            // 添加表体行和列
-            jsonData[0].values.forEach(function (value) {
+            async close() {
+                this.dom.disable(['btn_save', 'btn_close', 'btn_execute'])
+                    .enable('btn_open')
+                    .text('label_filename', '')
+                    .text('label_log', this.fileSystem.getFileName() + ' closed')
+
+                this.show([])
+
+                this.fileSystem.closeStream() // 关闭文件
+            }
+
+            async execute() {
+                let result = []
+                let textarea = this.dom.one('text_input')
+
+                // 获取选中的文本 或者 全部文本
+                var sql = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd) || textarea.value;
+
+                const time = await timeCost(async () => {
+                    result = this.db.exec(sql);
+                })
+
+                this.show(result)
+
+                this.dom.text('label_log', `代码执行时间：${time} 毫秒\n`)
+            }
+
+            async show(jsonData) {
+                // 解决this指向问题
+                let $ = this.dom
+
+                // 获取表格容器
+                var tableContainer = $.one('table-container')
+                tableContainer.innerHTML = ''
+
+                if (jsonData.length === 0) {
+                    return
+                }
+
+                // 创建表格元素
+                var table = $.el("table");
+
+                // 创建表头
+                var thead = $.el("thead");
                 var tr = $.el("tr");
 
-                value.forEach(function (val) {
-                    var td = $.el("td");
-                    td.textContent = val;
-                    tr.appendChild(td);
+                // 添加表头列
+                jsonData[0].columns.forEach(function (column) {
+                    var th = $.el("th");
+                    th.textContent = column;
+                    tr.appendChild(th);
                 });
 
-                // 将行添加到表体部分
-                tbody.appendChild(tr);
-            });
+                // 将表头行添加到表头部分
+                thead.appendChild(tr);
 
-            // 将表体部分添加到表格中
-            table.appendChild(tbody);
+                // 将表头部分添加到表格中
+                table.appendChild(thead);
 
-            tableContainer.appendChild(table);
+                // 创建表体
+                var tbody = $.el("tbody");
+
+                // 添加表体行和列
+                jsonData[0].values.forEach(function (value) {
+                    var tr = $.el("tr");
+
+                    value.forEach(function (val) {
+                        var td = $.el("td");
+                        td.textContent = val;
+                        tr.appendChild(td);
+                    });
+
+                    // 将行添加到表体部分
+                    tbody.appendChild(tr);
+                });
+
+                // 将表体部分添加到表格中
+                table.appendChild(tbody);
+
+                tableContainer.appendChild(table);
+            }
         }
 
-        addEventListener('load', async function () {
-            $.disable(['btn_save', 'btn_close', 'btn_execute'])
+        let sqlite = null
+        addEventListener('load', async () => {
+            sqlite = new Sqlite()
         })
-
     </script>
 
 
-    <input type="button" id="btn_open" value="打开sqlite" onclick="openSqlite()">
-    <input type="button" id="btn_close" value="关闭sqlite" onclick="closeSqlite()">
-    <input type="button" id="btn_save" value="保存sqlite" onclick="saveSqlite()">
+    <input type="button" id="btn_open" value="打开sqlite">
+    <input type="button" id="btn_close" value="关闭sqlite">
+    <input type="button" id="btn_save" value="保存sqlite">
     <label id="label_filename"></label>
-    <input type="button" id="btn_execute" value="执行选中或全部SQL" onclick="executeSql()">
+    <input type="button" id="btn_execute" value="执行选中或全部SQL">
 
     <textarea id="text_input">SELECT * FROM sqlite_schema;</textarea>
 
     <div id="table-container"></div>
 
     <label id="label_log"></label>
-
 </body>
 
 </html>
