@@ -71,63 +71,86 @@
             enable = ids => this.base(ids, item => item.removeAttribute('disabled'))
             disable = ids => this.base(ids, item => item.setAttribute('disabled', 'disabled'))
         }
+
+        class FileSystem {
+            async getStream() {
+                [this.fileHandle] = await window.showOpenFilePicker()
+
+                const file = await this.fileHandle.getFile()
+
+                let stream = await file.stream()
+                let reader = stream.getReader()
+                let result = await reader.read()
+
+                while (!result.done) {
+                    let temp = await reader.read()
+                    if (temp.done) {
+                        break
+                    }
+                    result.value = new Uint8Array([...result.value, ...temp.value])
+                }
+
+                return result.value
+            }
+
+            async saveStream(stream) {
+                const writable = await this.fileHandle.createWritable()
+
+                await writable.write(stream)
+                await writable.close()
+            }
+
+            async closeStream() {
+                if (this.fileHandle instanceof FileSystemFileHandle) {
+                    this.fileHandle = undefined
+                }
+            }
+
+            getFileName() {
+                return this.fileHandle.name
+            }
+        }
+
         let $ = new Query()
-
-
-        let fileHandle, db
+        let fileSystem = new FileSystem()
+        let db
 
         async function openSqlite() {
-            if (fileHandle === undefined) {
-                [fileHandle] = await window.showOpenFilePicker()
-            }
-
-            if (fileHandle === undefined) {
-                return
-            }
-
-            const file = await fileHandle.getFile()
-
-            let stream = await file.stream()
-            let reader = stream.getReader()
-            let result = await reader.read()
+            let result = await fileSystem.getStream() // 获取文件流
 
             let SQL = await initSqlJs();
-            db = new SQL.Database(result.value)
+            db = new SQL.Database(result)
 
             $.disable(['btn_open'])
                 .enable(['btn_close', 'btn_save', 'btn_execute'])
-                .text('label_filename', fileHandle.name)
-                .text('label_log', fileHandle.name + ' open success')
+                .text('label_filename', fileSystem.getFileName())
+                .text('label_log', fileSystem.getFileName() + ' open success')
         }
 
         async function writeFile() {
-            const writable = await fileHandle.createWritable()
-
-            $.text('label_log', fileHandle.name + ' save start')
+            $.text('label_log', fileSystem.getFileName() + ' save start')
 
             const startTime = performance.now();
 
             const writableStream = db.export()
-            await writable.write(writableStream)
-            await writable.close()
+
+            await fileSystem.saveStream(writableStream) // 保存文件
 
             const endTime = performance.now();
             const executionTime = endTime - startTime;
 
-            $.text('label_log', fileHandle.name + ' save success, time cost: ' + executionTime + ' ms')
+            $.text('label_log', fileSystem.getFileName() + ' save success, time cost: ' + executionTime + ' ms')
         }
 
         async function closeSqlite() {
-            if (fileHandle instanceof FileSystemFileHandle) {
-                $.disable(['btn_save', 'btn_close', 'btn_execute'])
-                    .enable('btn_open')
-                    .text('label_filename', '')
-                    .text('label_log', fileHandle.name + ' closed')
+            $.disable(['btn_save', 'btn_close', 'btn_execute'])
+                .enable('btn_open')
+                .text('label_filename', '')
+                .text('label_log', fileSystem.getFileName() + ' closed')
 
-                showTable([])
+            showTable([])
 
-                fileHandle = undefined
-            }
+            fileSystem.closeStream() // 关闭文件
         }
 
         async function executeSql() {
