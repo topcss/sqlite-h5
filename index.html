@@ -15,7 +15,6 @@
             height: 300px;
         }
 
-
         table {
             border-collapse: collapse;
             width: 100%;
@@ -116,6 +115,10 @@
             getFileName() {
                 return this.fileHandle.name
             }
+
+            getFileHandle() {
+                return this.fileHandle
+            }
         }
 
         class Sqlite {
@@ -136,6 +139,25 @@
                     .click('btn_close', () => this.close())
                     .click('btn_save', () => this.save())
                     .click('btn_execute', () => this.execute())
+                    .click('btn_new_db', () => this.new_db())
+            }
+
+            async new_db() {
+                let SQL = await initSqlJs();
+                this.db = new SQL.Database()
+
+                this.dom.disable(['btn_new_db', 'btn_open'])
+                    .enable(['btn_close', 'btn_save', 'btn_execute'])
+                    .text('label_filename', 'new sqlite')
+                    .text('label_log', 'new sqlite success')
+                    // 测试数据
+                    .one('text_input').value = `create table test (id int, name varchar(20));
+insert into test values (1, "test");
+insert into test values (2, "test2");
+
+SELECT * FROM sqlite_schema;
+SELECT * FROM test;
+`
             }
 
             async open() {
@@ -144,13 +166,26 @@
                 let SQL = await initSqlJs();
                 this.db = new SQL.Database(result)
 
-                this.dom.disable(['btn_open'])
+                this.dom.disable(['btn_open', 'btn_new_db'])
                     .enable(['btn_close', 'btn_save', 'btn_execute'])
                     .text('label_filename', this.fileSystem.getFileName())
                     .text('label_log', this.fileSystem.getFileName() + ' open success')
             }
 
             async save() {
+                // 若为新建的sqlite，则需要先保存文件
+                if (this.fileSystem.getFileHandle() === undefined) {
+                    // 创建文件
+                    this.fileSystem.fileHandle = await window.showSaveFilePicker({
+                        types: [{
+                            description: 'sqlite',
+                            accept: { 'application/x-sqlite3': ['.sqlite'] }
+                        }]
+                    })
+
+                    this.dom.text('label_filename', this.fileSystem.getFileName())
+                }
+
                 this.dom.text('label_log', this.fileSystem.getFileName() + ' save start')
 
                 const time = await timeCost(async () => {
@@ -163,7 +198,7 @@
 
             async close() {
                 this.dom.disable(['btn_save', 'btn_close', 'btn_execute'])
-                    .enable('btn_open')
+                    .enable(['btn_open', 'btn_new_db'])
                     .text('label_filename', '')
                     .text('label_log', this.fileSystem.getFileName() + ' closed')
 
@@ -250,17 +285,14 @@
         })
     </script>
 
-
+    <input type="button" id="btn_new_db" value="新建sqlite">
     <input type="button" id="btn_open" value="打开sqlite">
     <input type="button" id="btn_close" value="关闭sqlite">
     <input type="button" id="btn_save" value="保存sqlite">
     <label id="label_filename"></label>
     <input type="button" id="btn_execute" value="执行选中或全部SQL">
-
     <textarea id="text_input">SELECT * FROM sqlite_schema;</textarea>
-
     <div id="table-container"></div>
-
     <label id="label_log"></label>
 </body>
 
